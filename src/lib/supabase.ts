@@ -3,13 +3,16 @@ import { AppState, Platform } from 'react-native';
 
 import { publicEnv } from '@/lib/env';
 import { sessionStorage } from '@/lib/secure-storage';
+import type { Database } from '@/types/database';
+
+export type AppSupabaseClient = SupabaseClient<Database>;
 
 /**
  * The single Supabase client. It is `null` only when the public env is misconfigured, in which
  * case the root layout renders a setup screen instead of the app (see `publicEnv`).
  */
-export const supabase: SupabaseClient | null = publicEnv.ok
-  ? createClient(publicEnv.env.supabaseUrl, publicEnv.env.supabasePublishableKey, {
+export const supabase: AppSupabaseClient | null = publicEnv.ok
+  ? createClient<Database>(publicEnv.env.supabaseUrl, publicEnv.env.supabasePublishableKey, {
       auth: {
         storage: sessionStorage,
         storageKey: 'dialed.auth',
@@ -21,7 +24,7 @@ export const supabase: SupabaseClient | null = publicEnv.ok
     })
   : null;
 
-export function getSupabase(): SupabaseClient {
+export function getSupabase(): AppSupabaseClient {
   if (!supabase) {
     throw new Error('Supabase is not configured. See .env.example.');
   }

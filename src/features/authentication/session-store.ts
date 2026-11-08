@@ -3,6 +3,9 @@ import { create } from 'zustand';
 
 export type AuthStatus = 'initializing' | 'signedOut' | 'signedIn';
 
+/** One-off celebration moments: a brand-new account, and a profile that just went live. */
+export type Celebration = 'account' | 'profile';
+
 interface SessionState {
   status: AuthStatus;
   session: Session | null;
@@ -11,13 +14,13 @@ interface SessionState {
    * While this is set, navigation keeps them on the reset screen instead of entering the app.
    */
   passwordResetInProgress: boolean;
-  /** A brand-new account just got in: the home screen plays its welcome celebration once. */
-  celebrationPending: boolean;
+  /** The next screen to show should play this celebration once, then clear it. */
+  celebration: Celebration | null;
 
   setSession: (session: Session | null) => void;
   beginPasswordReset: () => void;
   endPasswordReset: () => void;
-  queueCelebration: () => void;
+  queueCelebration: (celebration: Celebration) => void;
   clearCelebration: () => void;
 }
 
@@ -29,19 +32,19 @@ export const useSessionStore = create<SessionState>()((set) => ({
   status: 'initializing',
   session: null,
   passwordResetInProgress: false,
-  celebrationPending: false,
+  celebration: null,
 
   setSession: (session) =>
     set((state) => ({
       session,
       status: session ? 'signedIn' : 'signedOut',
       passwordResetInProgress: session ? state.passwordResetInProgress : false,
-      celebrationPending: session ? state.celebrationPending : false,
+      celebration: session ? state.celebration : null,
     })),
   beginPasswordReset: () => set({ passwordResetInProgress: true }),
   endPasswordReset: () => set({ passwordResetInProgress: false }),
-  queueCelebration: () => set({ celebrationPending: true }),
-  clearCelebration: () => set({ celebrationPending: false }),
+  queueCelebration: (celebration) => set({ celebration }),
+  clearCelebration: () => set({ celebration: null }),
 }));
 
 /** Whether the signed-in area of the app is reachable. */

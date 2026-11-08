@@ -56,7 +56,7 @@ export function useSignUp() {
     Parameters<typeof signUp>[0]
   >({
     mutationFn: signUp,
-    onMutate: () => queueCelebration(),
+    onMutate: () => queueCelebration('account'),
     onSuccess: (result) => {
       haptics.success();
       if (result.needsEmailVerification) withdrawCelebration();
@@ -79,7 +79,7 @@ export function useVerifySignUpCode() {
   const queueCelebration = useSessionStore((state) => state.queueCelebration);
   return useMutation<void, AuthFlowError, Parameters<typeof verifySignUpCode>[0]>({
     mutationFn: verifySignUpCode,
-    onMutate: () => queueCelebration(),
+    onMutate: () => queueCelebration('account'),
     onSuccess: feedback.onSuccess,
     onError: () => {
       withdrawCelebration();

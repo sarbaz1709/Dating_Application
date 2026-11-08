@@ -1,77 +1,49 @@
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import Animated, {
-  Easing,
-  FadeInDown,
-  ZoomIn,
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withTiming,
-} from 'react-native-reanimated';
+import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 
 import { Button } from '@/components/button';
 import { CheckMark } from '@/components/check-mark';
 import { ConfettiBurst } from '@/components/confetti-burst';
 import { FormMessage } from '@/components/form-message';
 import { GlowBackground } from '@/components/glow-background';
+import { ProgressBar } from '@/components/progress-bar';
 import { Screen } from '@/components/screen';
 import { SoundWave } from '@/components/sound-wave';
 import { Brand } from '@/constants/brand';
 import { useSignOut } from '@/features/authentication/hooks';
 import { useSessionStore } from '@/features/authentication/session-store';
+import { ProfilePreviewModal } from '@/features/profile/components/profile-preview-modal';
+import { ProfileStrengthCard } from '@/features/profile/components/profile-strength-card';
+import { useMyProfile } from '@/features/profile/hooks';
+import { getProfileStrength } from '@/features/profile/profile-strength';
 import { haptics } from '@/lib/haptics';
-import { Colors, Radius, SignalGradient, Spacing, Type } from '@/theme';
+import { Colors, FontFamily, Radius, SignalGradient, Spacing, Type } from '@/theme';
 
 type StepState = 'done' | 'next' | 'locked';
 
 /**
- * The road to a first call. Only the account step is real today; the others become live as each
- * MVP feature ships (profile, vibe check, discovery and calls). They are display-only, not
- * buttons, so nothing here pretends to work before it does.
+ * The road to a first call. Account and profile are real today; the vibe check and calls arrive
+ * with the next MVP features. Display-only, so nothing pretends to work before it does.
  */
 const JOURNEY: { title: string; body: string; state: StepState }[] = [
-  { title: 'Create your account', body: "You're in. Nice.", state: 'done' },
-  {
-    title: 'Build your profile',
-    body: 'Photos, a short bio, who you want to meet.',
-    state: 'next',
-  },
-  { title: 'Take the vibe check', body: 'Five quick questions.', state: 'locked' },
+  { title: 'Create your account', body: "You're in.", state: 'done' },
+  { title: 'Build your profile', body: 'Looking good.', state: 'done' },
+  { title: 'Take the vibe check', body: 'Five quick questions.', state: 'next' },
   { title: 'Make your first call', body: 'Five minutes. Then decide.', state: 'locked' },
 ];
-
-function ProgressBar({ progress }: { progress: number }) {
-  const width = useSharedValue(0);
-  useEffect(() => {
-    width.set(
-      withDelay(350, withTiming(progress, { duration: 900, easing: Easing.out(Easing.cubic) })),
-    );
-  }, [progress, width]);
-  const style = useAnimatedStyle(() => ({ width: `${width.get() * 100}%` }));
-
-  return (
-    <View
-      style={styles.progressTrack}
-      accessibilityRole="progressbar"
-      accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }}>
-      <Animated.View style={[styles.progressFill, style]}>
-        <LinearGradient
-          colors={SignalGradient}
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
-          style={StyleSheet.absoluteFill}
-        />
-      </Animated.View>
-    </View>
-  );
-}
 
 function StepBadge({ state, index }: { state: StepState; index: number }) {
   if (state === 'done') {
     return (
-      <Animated.View entering={ZoomIn.delay(500).springify().damping(10)} style={styles.badgeDone}>
+      <Animated.View
+        entering={ZoomIn.delay(400 + index * 120)
+          .springify()
+          .damping(10)}
+        style={styles.badgeDone}>
         <CheckMark size={12} color={Colors.background} weight={2.5} />
       </Animated.View>
     );
@@ -84,22 +56,32 @@ function StepBadge({ state, index }: { state: StepState; index: number }) {
 }
 
 export default function HomeScreen() {
-  const email = useSessionStore((state) => state.session?.user.email);
-  const celebrationPending = useSessionStore((state) => state.celebrationPending);
+  const { data: profile } = useMyProfile();
+  const celebration = useSessionStore((state) => state.celebration);
   const clearCelebration = useSessionStore((state) => state.clearCelebration);
-  // Snapshot on first render: brand-new accounts get the welcome party exactly once.
-  const [isNewAccount] = useState(celebrationPending);
+  // Snapshot on first render so the party plays exactly once, and ends when you navigate away.
+  const [justWentLive, setJustWentLive] = useState(celebration === 'profile');
+  useFocusEffect(useCallback(() => () => setJustWentLive(false), []));
+  const [previewOpen, setPreviewOpen] = useState(false);
   const signOut = useSignOut();
 
   useEffect(() => {
-    if (isNewAccount) {
+    if (justWentLive) {
       haptics.success();
       clearCelebration();
     }
-  }, [isNewAccount, clearCelebration]);
+  }, [justWentLive, clearCelebration]);
 
+  if (!profile) return null;
+
+  const name = profile.displayName ?? '';
+  const mainPhoto = profile.photos[0];
+  const strength = getProfileStrength({
+    hasBasics: true,
+    photoCount: profile.photos.length,
+    bio: profile.bio,
+  });
   const completed = JOURNEY.filter((step) => step.state === 'done').length;
-  const progress = completed / JOURNEY.length;
 
   return (
     <Screen
@@ -110,7 +92,7 @@ export default function HomeScreen() {
           <Button
             testID="home-log-out"
             label="Log out"
-            variant="secondary"
+            variant="ghost"
             onPress={() => signOut.mutate()}
             loading={signOut.isPending}
           />
@@ -125,46 +107,74 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.hero}>
-        <View style={styles.badgeHeroWrap}>
-          <Animated.View entering={ZoomIn.springify().damping(9)} style={styles.heroBadge}>
+        <View style={styles.avatarWrap}>
+          <Animated.View entering={ZoomIn.springify().damping(10)} style={styles.avatarRing}>
             <LinearGradient
               colors={SignalGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={[StyleSheet.absoluteFill, styles.heroBadgeFill]}
+              style={[StyleSheet.absoluteFill, styles.avatarRingFill]}
             />
-            <CheckMark size={34} color={Colors.textOnAccent} weight={5} />
+            <View style={styles.avatarInner}>
+              {mainPhoto?.url ? (
+                <Image
+                  source={{ uri: mainPhoto.url, cacheKey: mainPhoto.storagePath }}
+                  style={StyleSheet.absoluteFill}
+                  contentFit="cover"
+                  accessibilityLabel="Your main photo"
+                />
+              ) : (
+                <Text style={styles.avatarInitial}>{name.charAt(0).toUpperCase()}</Text>
+              )}
+            </View>
           </Animated.View>
-          {isNewAccount ? <ConfettiBurst /> : null}
+          {justWentLive ? <ConfettiBurst /> : null}
         </View>
         <Animated.Text
           entering={FadeInDown.delay(150).duration(450)}
           style={styles.heroTitle}
           accessibilityRole="header">
-          {isNewAccount ? "You're in." : 'Welcome back.'}
+          {justWentLive ? "You're live." : `Hey, ${name}.`}
         </Animated.Text>
         <Animated.Text entering={FadeInDown.delay(250).duration(450)} style={styles.heroBody}>
-          {isNewAccount
-            ? 'Your account is live. Next up: a profile worth calling.'
-            : 'Pick up where you left off.'}
+          {justWentLive
+            ? 'Your profile is ready. Next up: the vibe check.'
+            : strength.next
+              ? 'Your profile is live. A couple of touches would make it even better.'
+              : 'Your profile is fully dialed in.'}
         </Animated.Text>
-        {email ? (
-          <Animated.View entering={FadeInDown.delay(320).duration(450)} style={styles.emailPill}>
-            <Text style={styles.emailText} numberOfLines={1}>
-              {email}
-            </Text>
-          </Animated.View>
-        ) : null}
       </View>
 
-      <Animated.View entering={FadeInDown.delay(400).duration(500)} style={styles.card}>
+      <Animated.View entering={FadeInDown.delay(320).duration(450)} style={styles.stack}>
+        <ProfileStrengthCard strength={strength} onNextPress={() => router.push('/edit-profile')} />
+        <View style={styles.actions}>
+          <View style={styles.action}>
+            <Button
+              testID="home-edit-profile"
+              label="Edit profile"
+              variant="secondary"
+              onPress={() => router.push('/edit-profile')}
+            />
+          </View>
+          <View style={styles.action}>
+            <Button
+              testID="home-preview"
+              label="Preview"
+              variant="secondary"
+              onPress={() => setPreviewOpen(true)}
+            />
+          </View>
+        </View>
+      </Animated.View>
+
+      <Animated.View entering={FadeInDown.delay(420).duration(500)} style={styles.card}>
         <View style={styles.cardHeader}>
           <Text style={styles.cardTitle}>Road to your first call</Text>
           <Text style={styles.cardMeta}>
             {completed}/{JOURNEY.length}
           </Text>
         </View>
-        <ProgressBar progress={progress} />
+        <ProgressBar progress={completed / JOURNEY.length} delay={350} />
         <View style={styles.steps}>
           {JOURNEY.map((step, index) => (
             <View key={step.title} style={styles.step}>
@@ -180,6 +190,19 @@ export default function HomeScreen() {
           ))}
         </View>
       </Animated.View>
+
+      <ProfilePreviewModal
+        visible={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        name={name}
+        age={profile.age}
+        bio={profile.bio}
+        photos={profile.photos.map((photo) => ({
+          id: photo.id,
+          url: photo.url,
+          cacheKey: photo.storagePath,
+        }))}
+      />
     </Screen>
   );
 }
@@ -209,23 +232,38 @@ const styles = StyleSheet.create({
   hero: {
     alignItems: 'center',
     gap: Spacing.md,
-    paddingVertical: Spacing.xxl,
+    paddingTop: Spacing.xxl,
+    paddingBottom: Spacing.xl,
   },
-  badgeHeroWrap: {
+  avatarWrap: {
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.sm,
   },
-  heroBadge: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
+  avatarRing: {
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+    padding: 4,
+    boxShadow: '0 10px 40px 0 rgba(255, 77, 141, 0.4)',
+  },
+  avatarRingFill: {
+    borderRadius: 56,
+  },
+  avatarInner: {
+    flex: 1,
+    borderRadius: 52,
+    overflow: 'hidden',
+    backgroundColor: Colors.surfaceHigh,
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: `0 10px 40px 0 rgba(255, 77, 141, 0.45)`,
+    borderWidth: 3,
+    borderColor: Colors.background,
   },
-  heroBadgeFill: {
-    borderRadius: 42,
+  avatarInitial: {
+    fontFamily: FontFamily.display,
+    fontSize: 44,
+    color: Colors.text,
   },
   heroTitle: {
     ...Type.title,
@@ -238,21 +276,18 @@ const styles = StyleSheet.create({
     ...Type.body,
     color: Colors.textMuted,
     textAlign: 'center',
-    maxWidth: 300,
+    maxWidth: 320,
   },
-  emailPill: {
-    marginTop: Spacing.xs,
-    paddingVertical: 6,
-    paddingHorizontal: Spacing.md,
-    borderRadius: Radius.pill,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    maxWidth: '100%',
+  stack: {
+    gap: Spacing.md,
+    marginBottom: Spacing.xl,
   },
-  emailText: {
-    ...Type.caption,
-    color: Colors.textMuted,
+  actions: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+  },
+  action: {
+    flex: 1,
   },
   card: {
     gap: Spacing.lg,
@@ -276,17 +311,6 @@ const styles = StyleSheet.create({
     ...Type.small,
     color: Colors.textMuted,
     fontWeight: '700',
-  },
-  progressTrack: {
-    height: 8,
-    borderRadius: Radius.pill,
-    backgroundColor: Colors.surfaceHigh,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: Radius.pill,
-    overflow: 'hidden',
   },
   steps: {
     gap: Spacing.lg,

@@ -9,7 +9,7 @@ beforeEach(() => {
     status: 'initializing',
     session: null,
     passwordResetInProgress: false,
-    celebrationPending: false,
+    celebration: null,
   });
 });
 
@@ -37,11 +37,11 @@ describe('session store', () => {
   it('clears transient flags when the session ends', () => {
     const store = useSessionStore.getState();
     store.setSession(fakeSession);
-    store.queueCelebration();
+    store.queueCelebration('account');
     store.beginPasswordReset();
 
     useSessionStore.getState().setSession(null);
-    expect(useSessionStore.getState().celebrationPending).toBe(false);
+    expect(useSessionStore.getState().celebration).toBeNull();
     expect(useSessionStore.getState().passwordResetInProgress).toBe(false);
   });
 });

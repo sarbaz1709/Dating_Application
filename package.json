@@ -18,7 +18,8 @@
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",
-    "db:test": "supabase test db"
+    "db:test": "supabase test db",
+    "db:types": "supabase gen types typescript --local --schema public > src/types/database.ts && prettier --write src/types/database.ts"
   },
   "jest": {
     "preset": "jest-expo",
@@ -37,6 +38,8 @@
     "expo-font": "~58.0.11",
     "expo-haptics": "~58.0.7",
     "expo-image": "~58.0.18",
+    "expo-image-manipulator": "~58.0.16",
+    "expo-image-picker": "~58.0.10",
     "expo-linear-gradient": "~58.0.3",
     "expo-linking": "~58.0.16",
     "expo-router": "~58.0.30",
